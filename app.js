@@ -1,9 +1,16 @@
+// Used to keep secrets safe. NOTE:-> It is placed at the top of our file
+require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
+//Used for encrypting
+const encrypt = require("mongoose-encryption");
+
 
 const app = express();
+
+// console.log(process.env.API_KEY);
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -16,11 +23,25 @@ mongoose.connect("mongodb://localhost:27017/userDB", {
     useNewUrlParser: true
 });
 
-// Creating new schema
-const userSchema = {
+// // Creating new schema
+// const userSchema = {
+//     email: String,
+//     password: String
+// };
+
+// Creating new schema for mongoose encryption
+// Now userSchema is no longer simple js object, it is now an object created from mongoose Schema class
+const userSchema = new mongoose.Schema({
     email: String,
     password: String
-};
+});
+
+// const secret = "Thisisourlittlesecret.";
+// Using secret to encrypt out database
+userSchema.plugin(encrypt, {
+    secret: process.env.SECRET,
+    encryptedFields: ["password"]
+});
 
 // Creating new model
 const User = mongoose.model("User", userSchema);
