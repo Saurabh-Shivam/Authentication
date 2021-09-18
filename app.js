@@ -4,10 +4,13 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-//Salting and Hashing passwords with bcrypt
-const bcrypt = require("bcrypt");
+// At first require this for using passport.js to add cookies and sessions
+const session = require("express-session");
+//Second
+const passport = require("passport");
+//Third
+const passportLocalMongoose = require("passport-local-mongoose");
 
-const saltRounds = 10;
 
 const app = express();
 
@@ -17,16 +20,22 @@ app.use(bodyParser.urlencoded({
     extended: true
 }));
 
+//Initialising and using session
+app.use(session({
+    secret: "Our little secret.",
+    resave: false,
+    saveUninitialized: false
+}));
+
+//Initialising and using passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+
 // Connecting to the database
 mongoose.connect("mongodb://localhost:27017/userDB", {
     useNewUrlParser: true
 });
-
-// // Creating new schema
-// const userSchema = {
-//     email: String,
-//     password: String
-// };
 
 // Creating new schema for mongoose encryption
 // Now userSchema is no longer simple js object, it is now an object created from mongoose Schema class
@@ -35,8 +44,18 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
+// This will be used to hash and salt our passwords and to save our users into the mongodbb database
+userSchema.plugin(passportLocalMongoose);
+
 // Creating new model
 const User = mongoose.model("User", userSchema);
+
+passport.use(User.createStrategy());
+
+// Saving the user data, eg-> saving messages into fortune cookkies 
+passport.serializeUser(User.serializeUser());
+// Using the user data, eg-> reading the messages from the fortune cokkies and deleting them
+passport.deserializeUser(User.deserializeUser());
 
 app.get('/', (req, res) => {
 
@@ -44,9 +63,26 @@ app.get('/', (req, res) => {
 
 });
 
+app.get('/secrets', function (req, res) {
+
+    if (req.isAuthenticated()) {
+        res.render("secrets");
+    } else {
+        res.redirect("/login");
+    }
+
+});
+
 app.get('/login', (req, res) => {
 
     res.render("login");
+
+});
+
+app.get('/logout', (req, res) => {
+
+    req.logout();
+    res.redirect("/");
 
 });
 
@@ -59,50 +95,38 @@ app.get('/register', (req, res) => {
 // Registering new users with email and password
 app.post('/register', (req, res) => {
 
-    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
-        // Creating new document
-        const newUser = new User({
-            email: req.body.username,
-            // Hashing our password
-            password: hash
-        });
-
-        // Savinng document to the database
-        newUser.save(function (err) {
-            if (err) {
-                console.log(err);
-            } else {
-                res.render("secrets");
-            }
-        });
+    User.register({
+        username: req.body.username
+    }, req.body.password, function (err, user) {
+        if (err) {
+            console.log(err);
+            res.render("/register");
+        } else {
+            passport.authenticate("local")(req, res, function () {
+                res.redirect("/secrets");
+            });
+        }
     });
-
-
 
 });
 
 // Enabling login feature for the users
 app.post('/login', (req, res) => {
 
-    const username = req.body.username;
-    const password = req.body.password;
+    const user = new User({
+        username: req.body.username,
+        password: req.body.password
+    });
 
-    // Checking in the database
-    User.findOne({
-        email: username
-    }, function (err, foundUser) {
+    req.login(user, function (err) {
         if (err) {
             console.log(err);
         } else {
-            if (foundUser) {
-                bcrypt.compare(password, foundUser.password, function (err, result) {
-                    if (result == true) {
-                        res.render("secrets")
-                    }
-                });
-            }
+            passport.authenticate("local")(req, res, function () {
+                res.redirect("/secrets");
+            });
         }
-    });
+    })
 
 });
 
