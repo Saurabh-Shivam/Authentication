@@ -4,13 +4,10 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-//Used for encrypting
-const encrypt = require("mongoose-encryption");
-
+// Hashing Passwords
+const md5 = require("md5");
 
 const app = express();
-
-// console.log(process.env.API_KEY);
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -34,13 +31,6 @@ mongoose.connect("mongodb://localhost:27017/userDB", {
 const userSchema = new mongoose.Schema({
     email: String,
     password: String
-});
-
-// const secret = "Thisisourlittlesecret.";
-// Using secret to encrypt out database
-userSchema.plugin(encrypt, {
-    secret: process.env.SECRET,
-    encryptedFields: ["password"]
 });
 
 // Creating new model
@@ -70,7 +60,8 @@ app.post('/register', (req, res) => {
     // Creating new document
     const newUser = new User({
         email: req.body.username,
-        password: req.body.password
+        // Hashing our password
+        password: md5(req.body.password)
     });
 
     // Savinng document to the database
@@ -88,7 +79,8 @@ app.post('/register', (req, res) => {
 app.post('/login', (req, res) => {
 
     const username = req.body.username;
-    const password = req.body.password;
+    // Hashing our password
+    const password = md5(req.body.password);
 
     // Checking in the database
     User.findOne({
@@ -100,6 +92,8 @@ app.post('/login', (req, res) => {
             if (foundUser) {
                 if (foundUser.password === password) {
                     res.render("secrets")
+                } else {
+                    res.send("Please check your password");
                 }
             }
         }
